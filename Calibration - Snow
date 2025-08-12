@@ -1,0 +1,118 @@
+---
+title: "Stat 517 project 5"
+author: "Jina Ryu"
+date: "2025-03-25"
+output: html_document
+---
+
+## Data Calibration
+
+```{r}
+# Load necessary library
+library(ggplot2)
+library(dplyr)
+library(boot)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Create the data frame
+data <- data.frame(
+  Density_Reported = c(0.686, 0.604, 0.508, 0.412, 0.318, 0.223, 0.148, 0.080, 0.001),
+  Gain1 = c(17.6, 24.8, 39.4, 60.0, 87.0, 128, 199, 298, 423),
+  Gain2 = c(17.3, 25.9, 37.6, 58.3, 92.7, 130, 204, 298, 421),
+  Gain3 = c(16.9, 26.3, 38.1, 59.6, 90.5, 131, 199, 297, 422),
+  Gain4 = c(16.2, 24.8, 37.7, 59.1, 85.8, 129, 207, 288, 428),
+  Gain5 = c(17.1, 24.8, 36.3, 56.3, 87.5, 127, 200, 296, 436),
+  Gain6 = c(18.5, 27.6, 38.7, 55.0, 88.3, 129, 200, 293, 427),
+  Gain7 = c(18.7, 28.5, 39.4, 52.9, 91.6, 132, 205, 301, 426),
+  Gain8 = c(17.4, 30.5, 38.8, 54.1, 88.2, 133, 205, 299, 428),
+  Gain9 = c(18.6, 28.4, 39.2, 56.9, 88.6, 134, 202, 298, 427),
+  Gain10 = c(16.8, 27.7, 40.3, 56.0, 84.7, 133, 201, 293, 429)
+)
+
+# Introduce measurement error to the reported densities
+measurement_error <- rnorm(nrow(data), mean = 0, sd = 0.01)  # Assuming normal error with SD = 0.01
+data$Density_True <- data$Density_Reported + measurement_error
+
+# Compute the mean and standard deviation of Gain for each Density
+data <- data %>%
+  rowwise() %>%
+  mutate(Mean_Gain = mean(c_across(Gain1:Gain10)),
+         SD_Gain = sd(c_across(Gain1:Gain10)))
+
+# Create the scatter plot
+plot <- ggplot(data, aes(x = Mean_Gain, y = Density_True)) +
+  geom_point(color = 'blue', size = 3) +
+  geom_line(linetype = "dashed", color = "gray") +
+  scale_y_reverse() +  # Invert y-axis to match expected trend
+  labs(title = "Density vs. Gain with Measurement Error",
+       x = "Gain (grams per cubic centimeter)",
+       y = "True Density") +
+  theme_minimal()
+
+# Display the plot
+print(plot)
+
+```
+
+## Point and Interval Estimates
+
+```{r}
+# Function to predict True Density for a given Gain with interval estimates
+predict_density <- function(gain_value) {
+  approx_result <- approx(data$Mean_Gain, data$Density_True, xout = gain_value, rule = 2)
+  return(approx_result$y)
+}
+
+# Function to estimate confidence intervals using bootstrapping
+bootstrap_ci <- function(gain_value, n_boot = 1000) {
+  boot_samples <- replicate(n_boot, {
+    sampled_data <- data[sample(nrow(data), replace = TRUE), ]
+    approx(sampled_data$Mean_Gain, sampled_data$Density_True, xout = gain_value, rule = 2)$y
+  })
+  return(quantile(boot_samples, probs = c(0.025, 0.975)))
+}
+
+# Example: Predict True Density for Gain = 150
+gain_input <- 150
+predicted_density <- predict_density(gain_input)
+ci_density <- bootstrap_ci(gain_input)
+
+print(paste("Predicted True Density for Gain =", gain_input, "is", round(predicted_density, 4)))
+print(paste("95% Confidence Interval: (", round(ci_density[1], 4), ",", round(ci_density[2], 4), ")"))
+
+```
+
+## Truth Value
+
+```{r}
+# Load necessary library
+library(dplyr)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Create the data frame
+data <- data.frame(
+  Density_Reported = c(0.686, 0.604, 0.508, 0.412, 0.318, 0.223, 0.148, 0.080, 0.001)
+)
+
+# Generate measurement error (assuming normal distribution with mean 0 and SD 0.01)
+data$Measurement_Error <- rnorm(nrow(data), mean = 0, sd = 0.01)
+
+# Compute the true density
+data$Density_True <- data$Density_Reported + data$Measurement_Error
+
+# Print the table with reported density, measurement error, and true density
+print(data)
+
+```
+
+-The true density is now becoming more inaccurate compared to the density reported which may mean that predictions for a density with a given gain will have a higher variability if the truth value or measurement error is large
+
+-Bias can also occur during the measurement if there is something unusual in the environment such as varying quality of the snow when extracted from the site
+
+-This could also decrease the model accuracy as well since the measurement error could be incorrect which affects the overall model.
+
+-The "truth" being measured in such a matter can come off as confusing especially if you are using the sum of measurement error and reported value.
