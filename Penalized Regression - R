@@ -1,0 +1,71 @@
+attach(penalized_logistic_data)
+y<- penalized_logistic_data$Y
+x<- as.matrix(penalized_logistic_data[, 2:21])
+
+#alpha=0 means that Ridge regression is chosen
+ridge<- cv.glmnet(x,y, alpha=0)
+
+plot(ridge)
+
+best_lambda<- ridge$lambda.min
+best_lambda
+
+final<- glmnet(x,y,alpha=0, lambda = best_lambda)
+coefficients<- coef(final)
+coefficients
+
+lasso_model <- glmnet(x,y, family = "binomial", alpha = 1) 
+
+# alpha=1 means that we are choosing a Lasso Regression 
+# family= "binomial" means that we are doing Logistic Penalized Regression
+
+
+cv_lasso <- cv.glmnet(x, y, family = "binomial", alpha = 1)
+# Creates all the lambdas to be minimize the cross-validation error by the regression
+
+plot(cv_lasso)
+
+# Best lambda (minimizes cross-validation error)
+best_lambda <- cv_lasso$lambda.min
+best_lambda
+
+
+final_model <- glmnet(x, y, family = "binomial", alpha = 1, lambda = best_lambda)
+
+coef(final_model)  # Displays the coefficients for our model
+
+# Ridge Regression 
+
+y<-penalized_logistic_data$Y
+x<- as.matrix(penalized_logistic_data[, 2:21])
+
+ridge_model <- glmnet(x, y,family = "binomial", alpha = 0) 
+
+# alpha=0 means that we are choosing a Ridge Regression 
+cv_ridge <- cv.glmnet(x, y,family = "binomial", alpha = 0)
+# Creates all the lambdas to be minimized the cross-validation error by the regression
+plot(cv_ridge)
+# Best lambda (minimizes cross-validation error)
+best_lambda <- cv_ridge$lambda.min
+best_lambda
+final_model <- glmnet(x, y,family = "binomial", alpha = 0, lambda = best_lambda)
+coef(final_model)  # Displays the coefficients for our model
+
+
+# Elastic Net Regression
+
+y<-penalized_logistic_data$Y
+x<- as.matrix(penalized_logistic_data[, 2:21])
+
+elastic_model <- glmnet(x, y,family = "binomial", alpha = .5) 
+
+# alpha=.5 means that we are choosing a Elastic Net Regression
+cv_elastic <- cv.glmnet(x, y,family = "binomial", alpha = .5)
+# Creates all the lambdas to be minimized the cross-validation error by the regression
+plot(cv_elastic)
+# Best lambda (minimizes cross-validation error)
+best_lambda <- cv_elastic$lambda.min
+best_lambda
+final_model <- glmnet(x, y, alpha = .5,family = "binomial", lambda = best_lambda)
+coef(final_model)  # Displays the coefficients for our model
+
