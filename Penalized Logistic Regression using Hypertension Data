@@ -1,0 +1,107 @@
+##### 
+detach(data)
+library(readr)
+data <- read_csv("/Users/jinar/Desktop/STAT 431/Assignment/assignment 4/data_hypertension-more.csv")
+attach(data)
+
+head(data)
+nrow(data)
+
+####
+### Categorical Variables: D, sev.obes, diet.pat, fh.hypt
+### Continuous Variables: wt.lb, ht.cm, age.yr
+####
+
+####
+# install.packages("tidyverse")
+library(tidyverse)
+library(car)  
+library(broom)
+
+#######################################################
+#### We need to make sure categorical variables are in factors
+#######################################################
+data$D <- factor(data$D, levels = c(0, 1), labels = c("No", "Yes"))
+data$sev.obes <- factor(data$sev.obes, 
+                        levels = 1:4, 
+                        labels = c("Normal", "Overweight", "Obese", "Severely Obese"))
+data$diet.pat <- factor(data$diet.pat, levels = c("A", "B", "C"),
+                        labels = c("High-sodium", "Balanced", "Low-sodium"))
+data$fh.hypt <- factor(data$fh.hypt, levels = c(0, 1), labels = c("No", "Yes"))
+
+
+#######################################################
+#### Full logistic Regression
+#######################################################
+data_clean <- subset(data, select = -ID)
+
+###Center the age, lowest age appearing in dataset is 20.4. ###
+range(data$age.yr)
+data_clean$age_centered <- data_clean$age.yr - 20
+
+
+full_model <- glm(D ~ (sev.obes + diet.pat + fh.hypt + wt.lb + ht.cm + age_centered)^2,
+               data = data_clean,
+               family = binomial)
+summary(full_model)
+
+library(car)
+
+# Main effects only model
+main_model <- glm(D ~ sev.obes + diet.pat + fh.hypt + wt.lb + ht.cm + age.yr,
+                  data = data_clean, family = binomial)
+
+# VIF
+vif(main_model)
+  ### Result: adjusted VIF (GVIF^(1/(2*Df))) looks all good. 
+
+# Correlation matrix for continuous variables
+numeric_vars <- data_clean[, c("wt.lb", "ht.cm", "age.yr")]
+cor_matrix <- cor(numeric_vars)
+cor_matrix
+  ## +1: positive correlation, 0: no correlation, -1: negative corrleation
+
+#######################################################
+#### Model selection method (to find the reduced model)
+#######################################################
+backwardAIC<-step(full_model,direction="backward")
+## D ~ sev.obes + diet.pat + age.yr + sev.obes:diet.pat has the LOWEST AIC
+summary(backwardAIC)
+
+
+## Compare full model vs. reduced model
+    # Ho: reduced model is sufficient
+    # Ha: full model fits better than reduced model
+anova(full_model, backwardAIC)
+### p-value = 0.7001 --> fail to reject null
+
+#predicted as used before
+predicted_probs <- predict(backwardAIC, type = "response")
+#outcome to numeric of 0 and 1 
+actual_numeric<- ifelse(data_clean$D =="Yes", 1,0)
+
+#run hosmer-lemeshow test (10 groups) 10 groups makes about 260 observations per group. 
+hoslem_test<- hoslem.test(actual_numeric, predicted_probs, g=10)
+
+#result 
+print(hoslem_test)
+# Create a dataframe with actual and predicted
+calib_df <- data.frame(predicted = predicted_probs, actual = actual_numeric)
+calib_plot_data <- calib_df %>%
+  mutate(decile = ntile(predicted, 10)) %>%
+  group_by(decile) %>%
+  summarise(
+    avg_pred = mean(predicted),
+    avg_actual = mean(actual)
+  )
+
+ggplot(calib_plot_data, aes(x = avg_pred, y = avg_actual)) +
+  geom_line(color = "blue", size = 1.2) +
+  geom_point(size = 2.5) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(
+    title = "Calibration Plot",
+    x = "Average Predicted Probability",
+    y = "Observed Proportion with Outcome"
+  ) +
+  theme_minimal()
