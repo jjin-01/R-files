@@ -1,0 +1,192 @@
+---
+z---
+title: "STAT 517 Project 4"
+author: "Jina Ryu"
+date: "2025-03-11"
+output: html_document
+---
+
+## Analysis (LDA)
+
+```{r}
+# Load necessary library
+library(ggplot2)
+
+# Read the dataset
+leaves <- read.csv("C:/Users/willc/OneDrive/Documents/stat 517 project 4.csv")
+
+# Split data by species
+cherry_leaves <- subset(leaves, Leaf == "Cherry")
+pear_leaves <- subset(leaves, Leaf == "Pear")
+
+# Compute mean vectors
+print(colnames(leaves))
+mu_cherry <- colMeans(cherry_leaves[, c("Width", "Length")])
+mu_pear <- colMeans(pear_leaves[, c("Width", "Length")])
+
+# Compute pooled covariance matrix
+cov_cherry <- cov(cherry_leaves[, c("Width", "Length")])
+cov_pear <- cov(pear_leaves[, c("Width", "Length")])
+n_cherry <- nrow(cherry_leaves)
+n_cherry
+n_pear <- nrow(pear_leaves)
+n_pear
+pooled_cov <- ((n_cherry - 1) * cov_cherry + (n_pear - 1) * cov_pear) / (n_cherry + n_pear - 2)
+
+inv_pooled_cov <- solve(pooled_cov)
+w <- inv_pooled_cov %*% (mu_cherry - mu_pear) 
+b <- -0.5 * (mu_cherry + mu_pear) %*% inv_pooled_cov %*% (mu_cherry - mu_pear)
+
+# Define classification function
+classify_leaf <- function(Width, Length) {
+  x <- c(Width, Length)
+  score <- t(w) %*% x + b
+  if (score > 0) {
+    return("Cherry")
+  } else {
+    return("Pear")
+  }
+}
+
+print(colnames(leaves))
+# Classify training data
+leaves$predicted <- apply(leaves[, c("Width", "Length")], 1, function(row) classify_leaf(row[1], row[2]))
+leaves$error <- leaves$Leaf != leaves$predicted
+error_rate <- sum(leaves$error) / nrow(leaves)
+print(paste("Classification error rate:", error_rate))
+
+# Classify new leaves
+new_leaves <- data.frame(Width = c(32, 38, 40), Length = c(82, 52, 76))
+new_leaves$classification <- apply(new_leaves, 1, function(row) classify_leaf(row[1], row[2]))
+print(new_leaves)
+# Decision boundary equation
+slope <- -w[1] / w[2]
+intercept <- -b / w[2]
+
+decision_boundary <- function(x) slope * x + intercept
+decision_boundary
+
+# Plot decision boundary
+ggplot(leaves, aes(x = Width, y = Length, color = Leaf)) +
+  geom_point(size = 3) +
+  stat_function(fun = decision_boundary, color = "black") +
+  labs(title = "Classification of Cherry and Pear Leaves")
+```
+
+```{r}
+# Define a function to print the LDA PDF equation
+print_lda_pdf_equation <- function(mu_cherry, mu_pear, sigma) {
+  d <- length(mu_cherry)  # Dimension (2 for Width and Length)
+  sigma_det <- det(sigma)  # Determinant of the covariance matrix
+  sigma_inv <- solve(sigma)  # Inverse of the covariance matrix
+  
+  # Print the PDF formula for the LDA classifier
+  cat("LDA PDF for Cherry and Pear leaves (common covariance matrix):\n")
+  cat("f(x | y = k) = (1 / (2 * pi)^(d / 2) * det(Sigma)^(1 / 2)) * exp(-0.5 * t(x - mu_k) %*% inv(Sigma) %*% (x - mu_k))\n")
+  cat("\nWhere:\n")
+  cat(paste0("  d = ", d, " (dimension: 2 for Width and Length)\n"))
+  cat(paste0("  mu_cherry = (", paste(mu_cherry, collapse = ", "), ")\n"))
+  cat(paste0("  mu_pear = (", paste(mu_pear, collapse = ", "), ")\n"))
+  cat(paste0("  Sigma = [", paste(sigma[1, ], collapse = ", "), "], [", paste(sigma[2, ], collapse = ", "), "]\n"))
+  cat(paste0("  det(Sigma) = ", sigma_det, "\n"))
+  cat(paste0("  inv(Sigma) = [", paste(sigma_inv[1, ], collapse = ", "), "], [", paste(sigma_inv[2, ], collapse = ", "), "]\n"))
+}
+
+# Print LDA PDF equations
+print_lda_pdf_equation(mu_cherry, mu_pear, pooled_cov)
+
+```
+
+## Analysis (QDA)
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+
+# Read the dataset
+leaves <- read.csv("C:/Users/willc/OneDrive/Documents/stat 517 project 4.csv")
+
+# Split data by species
+cherry_leaves <- subset(leaves, Leaf == "Cherry")
+pear_leaves <- subset(leaves, Leaf == "Pear")
+
+# Compute mean vectors
+mu_cherry <- colMeans(cherry_leaves[, c("Width", "Length")])
+mu_pear <- colMeans(pear_leaves[, c("Width", "Length")])
+
+# Compute separate covariance matrices
+cov_cherry <- cov(cherry_leaves[, c("Width", "Length")])
+cov_pear <- cov(pear_leaves[, c("Width", "Length")])
+
+# Compute inverses of covariance matrices
+inv_cov_cherry <- solve(cov_cherry)
+inv_cov_pear <- solve(cov_pear)
+
+# Compute log determinants of covariance matrices
+log_det_cherry <- log(det(cov_cherry))
+log_det_pear <- log(det(cov_pear))
+
+# Define QDA classification function
+qda_discriminant <- function(Width, Length) {
+  x <- c(Width, Length)
+  
+  # Compute QDA discriminant scores
+  score_cherry <- -0.5 * t(x - mu_cherry) %*% inv_cov_cherry %*% (x - mu_cherry) - 0.5 * log_det_cherry
+  score_pear <- -0.5 * t(x - mu_pear) %*% inv_cov_pear %*% (x - mu_pear) - 0.5 * log_det_pear
+  
+  return(score_cherry - score_pear) # Decision boundary occurs where this is 0
+}
+
+# Classify training data
+leaves$predicted <- apply(leaves[, c("Width", "Length")], 1, function(row) {
+  if (qda_discriminant(row[1], row[2]) > 0) "Cherry" else "Pear"
+})
+leaves$error <- leaves$Leaf != leaves$predicted
+error_rate <- sum(leaves$error) / nrow(leaves)
+print(paste("QDA Classification error rate:", error_rate))
+
+# Classify new leaves
+new_leaves <- data.frame(Width = c(32, 38, 40), Length = c(82, 52, 76))
+new_leaves$classification <- apply(new_leaves, 1, function(row) {
+  if (qda_discriminant(row[1], row[2]) > 0) "Cherry" else "Pear"
+})
+print(new_leaves)
+
+# Create a grid of points for decision boundary
+x_range <- seq(min(leaves$Width) - 2, max(leaves$Width) + 2, length.out = 100)
+y_range <- seq(min(leaves$Length) - 2, max(leaves$Length) + 2, length.out = 100)
+grid <- expand.grid(Width = x_range, Length = y_range)
+grid$qda_score <- apply(grid, 1, function(row) qda_discriminant(row[1], row[2]))
+
+# Plot the data with decision boundary
+ggplot(leaves, aes(x = Width, y = Length, color = Leaf)) +
+  geom_point(size = 3) +
+  geom_contour(data = grid, aes(z = qda_score), breaks = 0, color = "black") + 
+  labs(title = "QDA Classification of Cherry and Pear Leaves",
+       subtitle = "Black contour represents the QDA decision boundary") +
+  theme_minimal()
+```
+
+```{r}
+# Define a function to print the PDF equation
+print_pdf_equation <- function(mu, sigma, species) {
+  d <- length(mu)  # Dimension (2 for Width and Length)
+  sigma_det <- det(sigma)  # Determinant of the covariance matrix
+  sigma_inv <- solve(sigma)  # Inverse of the covariance matrix
+  
+  # Print the PDF formula for the specified species
+  cat(paste0("PDF for ", species, " leaves:\n"))
+  cat(paste0("f(x) = (1 / (2 * pi)^(d / 2) * det(Sigma)^(1 / 2))) * exp(-0.5 * t(x - mu) %*% inv(Sigma) %*% (x - mu))\n"))
+  cat(paste0("Where:\n"))
+  cat(paste0("  d = ", d, " (dimension: 2 for Width and Length)\n"))
+  cat(paste0("  mu = (", paste(mu, collapse = ", "), ")\n"))
+  cat(paste0("  Sigma = [", paste(sigma[1, ], collapse = ", "), "], [", paste(sigma[2, ], collapse = ", "), "]\n"))
+  cat(paste0("  det(Sigma) = ", sigma_det, "\n"))
+  cat(paste0("  inv(Sigma) = [", paste(sigma_inv[1, ], collapse = ", "), "], [", paste(sigma_inv[2, ], collapse = ", "), "]\n"))
+}
+
+# Print PDF equations for Cherry and Pear
+print_pdf_equation(mu_cherry, cov_cherry, "Cherry")
+print_pdf_equation(mu_pear, cov_pear, "Pear")
+
+```
