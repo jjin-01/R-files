@@ -1,0 +1,228 @@
+---
+title: "STAT 543 Project 3"
+author: "Jina Ryu"
+date: "2025-02-24"
+output: html_document
+---
+
+## Analysis
+
+CHATGPT WAS USED TO ASSIST IN THE ANALYSIS
+
+```{r}
+setwd("C://Users//willc//OneDrive//Documents")
+df <- read.table("C://Users//willc//OneDrive//Documents//p3 txt.txt", header = TRUE, sep = "", stringsAsFactors = FALSE, fill = TRUE)
+
+head(df)
+```
+
+```{r}
+# Remove "LANG" column if it exists
+if ("LANG" %in% colnames(df)) {
+  df_no_lang <- df[, !colnames(df) %in% "LANG"]  # Exclude LANG column
+} else {
+  df_no_lang <- df  # If "LANG" is missing, keep all columns
+}
+
+# Define column groups
+p_columns <- paste0("P", 1:7)   # ["P1", "P2", ..., "P7"]
+n_columns <- paste0("N", 1:7)   # ["N1", "N2", ..., "N7"]
+g_columns <- paste0("G", 1:16)  # ["G1", "G2", ..., "G16"]
+
+# Ensure all required columns exist
+if (!all(p_columns %in% colnames(df_no_lang))) stop("Missing P1-P7 columns!")
+if (!all(n_columns %in% colnames(df_no_lang))) stop("Missing N1-N7 columns!")
+if (!all(g_columns %in% colnames(df_no_lang))) stop("Missing G1-G16 columns!")
+
+# Extract answer keys from the first row
+answer_key_p <- df_no_lang[1, p_columns]
+answer_key_n <- df_no_lang[1, n_columns]
+answer_key_g <- df_no_lang[1, g_columns]
+
+# Remove the first row from df_no_lang after extracting the answer key
+df_no_lang <- df_no_lang[-1, ]
+
+# Function to count matches in P1-P7 (5/7 required)
+count_p_matches <- function(row) {
+  sum(abs(as.numeric(row[p_columns]) - as.numeric(answer_key_p)) <= 1, na.rm = TRUE) >= 5
+}
+
+# Function to count matches in N1-N7 (5/7 required)
+count_n_matches <- function(row) {
+  sum(abs(as.numeric(row[n_columns]) - as.numeric(answer_key_n)) <= 1, na.rm = TRUE) >= 5
+}
+
+# Function to count matches in G1-G16 (10/16 required)
+count_g_matches <- function(row) {
+  sum(abs(as.numeric(row[g_columns]) - as.numeric(answer_key_g)) <= 1, na.rm = TRUE) >= 10
+}
+
+# Apply functions to all rows
+df_no_lang$P_Match_5of7 <- apply(df_no_lang, 1, count_p_matches)
+df_no_lang$N_Match_5of7 <- apply(df_no_lang, 1, count_n_matches)
+df_no_lang$G_Match_10of16 <- apply(df_no_lang, 1, count_g_matches)
+
+# Display results: RATER + separate match columns
+if ("RATER" %in% colnames(df)) {
+  print(df_no_lang[, c("RATER", "P_Match_5of7", "N_Match_5of7", "G_Match_10of16")])
+} else {
+  print(df_no_lang[, c(1, ncol(df_no_lang)-2, ncol(df_no_lang)-1, ncol(df_no_lang))])
+}
+```
+
+```{r}
+# Remove "LANG" column if it exists
+if ("LANG" %in% colnames(df)) {
+  df_no_lang <- df[, !colnames(df) %in% "LANG"]  # Exclude LANG column
+} else {
+  df_no_lang <- df  # If "LANG" is missing, keep all columns
+}
+
+# Define column groups
+p_columns <- paste0("P", 1:7)   # ["P1", "P2", ..., "P7"]
+n_columns <- paste0("N", 1:7)   # ["N1", "N2", ..., "N7"]
+g_columns <- paste0("G", 1:16)  # ["G1", "G2", ..., "G16"]
+all_columns <- c(p_columns, n_columns, g_columns)  # Combine all columns
+
+# Ensure all required columns exist
+if (!all(all_columns %in% colnames(df_no_lang))) stop("One or more required columns are missing!")
+
+# Convert all relevant columns to numeric (forces conversion)
+df_no_lang[, all_columns] <- lapply(df_no_lang[, all_columns], function(x) as.numeric(as.character(x)))
+
+# Extract answer keys from the first row (ensure numeric conversion)
+answer_key <- sapply(df_no_lang[1, all_columns], as.numeric)
+
+# Remove the first row from df_no_lang after extracting the answer key
+df_no_lang <- df_no_lang[-1, ]
+
+# Function to check if each value is within ±1 of the answer key
+match_with_tolerance <- function(value, reference_value) {
+  if (is.na(value) | is.na(reference_value)) {
+    return(FALSE)  # Treat NA as FALSE instead of NA
+  }
+  return(abs(value - reference_value) <= 1)
+}
+
+# Apply the function to each column individually
+for (col in all_columns) {
+  df_no_lang[[paste0(col, "_Match")]] <- mapply(match_with_tolerance, df_no_lang[[col]], answer_key[col])
+}
+
+# Display results: RATER + match results for each column
+if ("RATER" %in% colnames(df_no_lang)) {
+  print(df_no_lang[, c("RATER", paste0(all_columns, "_Match"))])
+} else {
+  print(df_no_lang[, c(1, (ncol(df_no_lang) - length(all_columns)):ncol(df_no_lang))])
+}
+```
+
+```{r}
+# Get all match columns (they end with "_Match")
+match_columns <- grep("_Match$", colnames(df_no_lang), value = TRUE)
+
+# Count FALSE values in each match column
+false_counts <- sapply(match_columns, function(col) sum(df_no_lang[[col]] == FALSE, na.rm = TRUE))
+
+# Find the column with the most FALSE values
+most_false_column <- names(which.max(false_counts))
+max_false_count <- max(false_counts)
+
+# Display results
+print(paste("Column with the most FALSE values:", most_false_column, "with", max_false_count, "FALSE values"))
+
+# Display all columns sorted by FALSE count (descending)
+sorted_false_counts <- sort(false_counts, decreasing = TRUE)
+print(sorted_false_counts)
+
+```
+
+```{r}
+# Count how many rows have all three conditions as TRUE
+all_true_count <- sum(df_no_lang$P_Match_5of7 & df_no_lang$N_Match_5of7 & df_no_lang$G_Match_10of16)
+
+# Print the result
+print(paste("Number of rows where all conditions are TRUE:", all_true_count))
+```
+
+```{r}
+# Count FALSE values in each column
+false_P <- sum(df_no_lang$P_Match_5of7 == FALSE, na.rm = TRUE)
+false_N <- sum(df_no_lang$N_Match_5of7 == FALSE, na.rm = TRUE)
+false_G <- sum(df_no_lang$G_Match_10of16 == FALSE, na.rm = TRUE)
+
+# Print results
+print(paste("Number of FALSE in P_Match_5of7:", false_P))
+print(paste("Number of FALSE in N_Match_5of7:", false_N))
+print(paste("Number of FALSE in G_Match_10of16:", false_G))
+```
+
+```{r}
+# Filter rows where all three conditions are TRUE
+rater_values <- df_no_lang$RATER[df_no_lang$P_Match_5of7 & df_no_lang$N_Match_5of7 & df_no_lang$G_Match_10of16]
+
+# Display the "RATER" values
+print(rater_values)
+
+```
+
+```{r}
+# Define the list of RATER values to filter
+selected_raters <- c(1, 2, 5, 6, 8, 9, 11, 12, 13, 15, 16, 17, 19, 20, 22, 23, 
+                     24, 25, 26, 29, 30, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 
+                     45, 46, 47, 49, 50, 51, 52, 53, 54, 56, 59, 64, 65, 66, 68, 
+                     71, 72)
+
+# Filter the dataframe to include only rows where RATER is in selected_raters
+df_filtered <- df[df$RATER %in% selected_raters, ]
+
+# Display the filtered dataframe
+print(df_filtered)
+
+```
+
+```{r}
+# Define column groups
+p_columns <- paste0("P", 1:7)   # ["P1", "P2", ..., "P7"]
+n_columns <- paste0("N", 1:7)   # ["N1", "N2", ..., "N7"]
+g_columns <- paste0("G", 1:16)  # ["G1", "G2", ..., "G16"]
+
+# Ensure all required columns exist
+if (!all(p_columns %in% colnames(df))) stop("Missing P1-P7 columns!")
+if (!all(n_columns %in% colnames(df))) stop("Missing N1-N7 columns!")
+if (!all(g_columns %in% colnames(df))) stop("Missing G1-G16 columns!")
+
+# Extract answer keys from the first row
+answer_key_p <- df[1, p_columns]
+answer_key_n <- df[1, n_columns]
+answer_key_g <- df[1, g_columns]
+
+# Function to count matches in P1-P7 (5/7 required)
+count_p_matches <- function(row) {
+  sum(abs(as.numeric(row[p_columns]) - as.numeric(answer_key_p)) <= 1, na.rm = TRUE) >= 5
+}
+
+# Function to count matches in N1-N7 (5/7 required)
+count_n_matches <- function(row) {
+  sum(abs(as.numeric(row[n_columns]) - as.numeric(answer_key_n)) <= 1, na.rm = TRUE) >= 5
+}
+
+# Function to count matches in G1-G16 (10/16 required)
+count_g_matches <- function(row) {
+  sum(abs(as.numeric(row[g_columns]) - as.numeric(answer_key_g)) <= 1, na.rm = TRUE) >= 10
+}
+
+# Apply functions to all rows
+df$P_Match_5of7 <- apply(df, 1, count_p_matches)
+df$N_Match_5of7 <- apply(df, 1, count_n_matches)
+df$G_Match_10of16 <- apply(df, 1, count_g_matches)
+
+# Define "Pass" and "Fail" based on all three conditions
+df$Result <- ifelse(df$P_Match_5of7 & df$N_Match_5of7 & df$G_Match_10of16, "Pass", "Fail")
+
+# Create the contingency table: Language vs. Result
+lang_result_table <- table(df$LANG, df$Result)
+
+# Print the table
+print(lang_result_table)
+```
